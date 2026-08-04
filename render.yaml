@@ -1,0 +1,45 @@
+# Serafinna Next.js — Render Starter (always-on, ~$7/mo)
+# Create: dashboard Blueprint or `render services create` (see README)
+
+services:
+  - type: web
+    name: serafinna-next
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_BASE_URL
+        value: https://www.serafinna.ru
+      - key: DATABASE_URL
+        sync: false
+      - key: SERAFINNA_ADMIN_USER
+        sync: false
+      - key: SERAFINNA_ADMIN_PASS
+        sync: false
+      - key: SERAFINNA_ADMIN_PATH
+        sync: false
+      - key: SERAFINNA_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: serafinna_uchet_bot
+      - key: TELEGRAM_BOT_TITLE
+        value: Serafinna Учёт
+      - key: TELEGRAM_ALLOWED_PHONES
+        value: "+79184092279"
+      - key: TELEGRAM_OWNER_PHONE
+        value: "+79184092279"
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
