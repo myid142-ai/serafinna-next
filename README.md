@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Serafinna — Next.js
 
-## Getting Started
+Полный перенос с Flask. **MVP (Phase 0–2 in progress):** витрина + public API + SQLite/Neon.
 
-First, run the development server:
+## Стек
+
+- Next.js (App Router) + TypeScript + Tailwind
+- Prisma + SQLite (local) / Neon Postgres (prod)
+- iron-session (admin — next phase)
+
+## Быстрый старт
 
 ```bash
+cd ~/Desktop/сайты\ /serafinna-next
+cp .env.example .env   # DATABASE_URL="file:./dev.db"
+npm install
+npx prisma db push
+npx tsx prisma/seed.ts
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Открой http://127.0.0.1:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API (уже есть)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | health + db |
+| GET | `/api/rooms` | категории (+ optional dates) |
+| GET | `/api/quote` | расчёт проживания |
+| POST | `/api/bookings` | заявка `pending` |
 
-## Learn More
+## Админка
 
-To learn more about Next.js, take a look at the following resources:
+```
+http://127.0.0.1:3000/m-panel
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Логин/пароль — из `.env` (`SERAFINNA_ADMIN_USER` / `SERAFINNA_ADMIN_PASS`).  
+Локально также пишется в `.admin_local.txt` (не коммитить).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Вкладки: **Заявки** · **Номера** · **Цены по месяцам**.
 
-## Deploy on Vercel
+## Roadmap
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. ~~Scaffold + schema + seed~~  
+2. ~~Public APIs + landing MVP~~  
+3. ~~Admin (iron-session, prices, bookings)~~  
+4. Telegram bot + finance  
+5. Cron, Neon prod, Vercel, cutover domain  
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Старый Flask на Render остаётся fallback до cutover.
+
+## Prod DB
+
+В `prisma/schema.prisma` смените `provider` на `postgresql` и задайте Neon `DATABASE_URL`.

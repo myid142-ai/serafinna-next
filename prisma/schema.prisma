@@ -1,0 +1,188 @@
+// Serafinna — schema 1:1 with Flask product
+// Production + local: PostgreSQL (Neon). DATABASE_URL from env.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           Int    @id @default(autoincrement())
+  username     String @unique
+  passwordHash String @map("password_hash")
+
+  @@map("admins")
+}
+
+model Room {
+  id              String  @id
+  name            String
+  description     String  @default("")
+  price           Int     @default(0)
+  totalRooms      Int     @default(0) @map("total_rooms")
+  availableRooms  Int     @default(0) @map("available_rooms")
+  sortOrder       Int     @default(0) @map("sort_order")
+
+  monthlyPrices   MonthlyPrice[]
+  dateInventory   DateInventory[]
+  bookings        Booking[]
+  dateBlocks      DateBlock[]
+  financeTxs      FinanceTransaction[]
+
+  @@map("rooms")
+}
+
+model Booking {
+  id              Int      @id @default(autoincrement())
+  categoryId      String   @map("category_id")
+  guestName       String   @map("guest_name")
+  phone           String
+  email           String   @default("")
+  checkIn         String   @map("check_in")
+  checkOut        String   @map("check_out")
+  guests          Int      @default(1)
+  comment         String   @default("")
+  status          String   @default("pending")
+  totalPrice      Int      @default(0) @map("total_price")
+  managerComment  String   @default("") @map("manager_comment")
+  handledBy       String   @default("") @map("handled_by")
+  handledAt       String?  @map("handled_at")
+  remindedAt      String?  @map("reminded_at")
+  guestNotifiedAt String?  @map("guest_notified_at")
+  createdAt       String   @map("created_at")
+  updatedAt       String   @map("updated_at")
+
+  room            Room     @relation(fields: [categoryId], references: [id])
+  history         BookingHistory[]
+  financeTxs      FinanceTransaction[]
+
+  @@index([status])
+  @@index([checkIn, checkOut])
+  @@map("bookings")
+}
+
+model MonthlyPrice {
+  categoryId String @map("category_id")
+  month      Int
+  price      Int
+  room       Room   @relation(fields: [categoryId], references: [id])
+
+  @@id([categoryId, month])
+  @@map("monthly_prices")
+}
+
+model DateInventory {
+  categoryId     String @map("category_id")
+  day            String
+  roomsAvailable Int    @map("rooms_available")
+  room           Room   @relation(fields: [categoryId], references: [id])
+
+  @@id([categoryId, day])
+  @@map("date_inventory")
+}
+
+model TelegramSubscriber {
+  chatId    String @id @map("chat_id")
+  phone     String
+  username  String @default("")
+  firstName String @default("") @map("first_name")
+  createdAt String @map("created_at")
+  updatedAt String @map("updated_at")
+
+  @@map("telegram_subscribers")
+}
+
+model FinanceTransaction {
+  id             Int     @id @default(autoincrement())
+  kind           String
+  amount         Int
+  category       String  @default("")
+  roomCategoryId String? @map("room_category_id")
+  bookingId      Int?    @map("booking_id")
+  description    String  @default("")
+  txDate         String  @map("tx_date")
+  createdAt      String  @map("created_at")
+  createdBy      String  @default("manual") @map("created_by")
+  voided         Int     @default(0)
+
+  room    Room?    @relation(fields: [roomCategoryId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([txDate])
+  @@index([kind])
+  @@index([bookingId])
+  @@map("finance_transactions")
+}
+
+model BotChatState {
+  chatId    String @id @map("chat_id")
+  state     String @default("")
+  data      String @default("{}")
+  updatedAt String @map("updated_at")
+
+  @@map("bot_chat_state")
+}
+
+model BookingHistory {
+  id         Int     @id @default(autoincrement())
+  bookingId  Int     @map("booking_id")
+  actor      String  @default("")
+  action     String
+  oldStatus  String  @default("") @map("old_status")
+  newStatus  String  @default("") @map("new_status")
+  comment    String  @default("")
+  createdAt  String  @map("created_at")
+  booking    Booking @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+  @@map("booking_history")
+}
+
+model DateBlock {
+  id         Int    @id @default(autoincrement())
+  categoryId String @map("category_id")
+  day        String
+  reason     String @default("closed")
+  note       String @default("")
+  room       Room   @relation(fields: [categoryId], references: [id])
+
+  @@unique([categoryId, day])
+  @@map("date_blocks")
+}
+
+model MinNightsRule {
+  id         Int    @id @default(autoincrement())
+  categoryId String @default("") @map("category_id")
+  month      Int
+  minNights  Int    @default(1) @map("min_nights")
+
+  @@unique([categoryId, month])
+  @@map("min_nights_rules")
+}
+
+model SiteContent {
+  key       String @id
+  value     String @default("")
+  updatedAt String @map("updated_at")
+
+  @@map("site_content")
+}
+
+model Backup {
+  id        Int    @id @default(autoincrement())
+  createdAt String @map("created_at")
+  payload   String
+
+  @@map("backups")
+}
+
+model CronLog {
+  key     String @id
+  lastRun String @default("") @map("last_run")
+
+  @@map("cron_log")
+}
