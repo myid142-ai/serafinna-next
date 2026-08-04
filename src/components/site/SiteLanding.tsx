@@ -348,34 +348,65 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
           />
           <div className="hero__overlay" />
           <div className="container hero__content">
-            <p className="hero__eyebrow">Гостевой дом · Джубга · Чёрное море</p>
-            <h1>Серафинна</h1>
-            <p className="hero__lead">
-              Гостевой дом в Джубге с панорамным видом на море, парковкой и мангальной зоной.
-              Снять номер у моря — с балконов открывается бухта и пляж.
-            </p>
-            <div className="hero__actions">
-              <a className="btn" href={WA_BOOK_HREF} target="_blank" rel="noopener noreferrer">
-                Забронировать в WhatsApp
-              </a>
-              <a className="btn btn--ghost" href="#booking">
-                Заявка на сайте
-              </a>
+            <div className="hero__copy">
+              <p className="hero__eyebrow">Гостевой дом · Джубга · Чёрное море</p>
+              <h1>Серафинна</h1>
+              <p className="hero__lead">
+                Тихий дом у моря для семьи и двоих. Панорамный вид на бухту,
+                уютные номера, парковка и мангал — как к хорошим людям в гости.
+              </p>
+              <div className="hero__actions">
+                <a
+                  className="btn"
+                  href={WA_BOOK_HREF}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Забронировать в WhatsApp
+                </a>
+                <a className="btn btn--ghost" href="#booking">
+                  Выбрать даты
+                </a>
+              </div>
+              <div className="hero__stats">
+                <div className="stat">
+                  <strong>4.9</strong>
+                  <span>рейтинг на Яндекс Картах</span>
+                </div>
+                <div className="stat">
+                  <strong>241+</strong>
+                  <span>отзывов гостей</span>
+                </div>
+                <div className="stat">
+                  <strong>~5 мин</strong>
+                  <span>до моря по лестнице</span>
+                </div>
+              </div>
             </div>
-            <div className="hero__stats">
-              <div className="stat">
-                <strong>4.9</strong>
-                <span>рейтинг на Яндекс Картах</span>
-              </div>
-              <div className="stat">
-                <strong>241+</strong>
-                <span>отзывов гостей</span>
-              </div>
-              <div className="stat">
-                <strong>~5 мин</strong>
-                <span>до моря по лестнице</span>
-              </div>
-            </div>
+
+            <aside className="hero__panel" aria-label="Быстрая бронь">
+              <h2>Забронировать отдых</h2>
+              <p className="hero__panel-lead">
+                Ответим днём в течение 2 часов. Можно сразу в WhatsApp или
+                оставить заявку с датами.
+              </p>
+              <ul className="hero__panel-list">
+                <li>Цены от 3 200 ₽ / ночь — в календаре</li>
+                <li>5 двухместных · 2 апартамента · 2 семейных</li>
+                <li>Предоплата за первую ночь · остальное на месте</li>
+              </ul>
+              <a className="btn" href="#booking">
+                Открыть календарь и заявку
+              </a>
+              <a
+                className="btn btn--ghost-dark"
+                href={WA_BOOK_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Написать в WhatsApp
+              </a>
+            </aside>
           </div>
         </section>
 
@@ -385,21 +416,21 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               <p className="section-label">О гостевом доме</p>
               <h2>Ваш отдых с видом на рассвет над водой</h2>
               <p>
-                Гостевой дом <strong>Серафинна</strong> в Джубге — на ул.&nbsp;Маяковского, 5А,
-                в тихом месте посёлка. С террасы и балконов — панорамный вид на бухту,
-                пляж и холмы побережья.
+                Гостевой дом <strong>Серафинна</strong> в Джубге — ул.&nbsp;Маяковского, 5А,
+                в тихом месте посёлка. С террасы и балконов открывается бухта, пляж
+                и холмы побережья — место, куда возвращаются.
               </p>
               <p>
-                Для семейного отдыха есть комфортные номера с кондиционером, общая кухня,
-                закрытая территория, парковка, мангал и бассейн (платная услуга).
-                До моря — около 5 минут по лестнице.
+                Здесь удобно семье и паре: кондиционер в номерах, общая кухня,
+                закрытая территория, парковка и мангал. До моря — около 5 минут
+                по лестнице. Бассейн на территории — платная услуга.
               </p>
               <div className="season-card" role="note">
-                <div className="season-card__icon" aria-hidden="true">☀️</div>
+                <div className="season-card__icon" aria-hidden="true">✦</div>
                 <p className="season-card__text">
-                  <strong>Высокий сезон (июль–август)</strong> — самое тёплое море
-                  и номера разбирают раньше всех. Забронируйте даты заранее, чтобы
-                  выбрать удобный номер и не ждать ответа в последний момент.
+                  <strong>Высокий сезон (июль–август)</strong> — тёплое море
+                  и номера разбирают заранее. Забронируйте даты, чтобы выбрать
+                  удобный номер без спешки.
                 </p>
               </div>
               <div className="note">
@@ -468,8 +499,11 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
         <section className="section rooms" id="rooms">
           <div className="container">
             <p className="section-label">Номера</p>
-            <h2 className="section-title">Уютные комнаты для отдыха</h2>
-            <p className="rooms__hint">Нажмите на фото — откроется галерея этой категории</p>
+            <h2 className="section-title">Номера с видом и для семьи</h2>
+            <p className="rooms__hint">
+              5 двухместных · 2 апартамента · 2 семейных. Нажмите на фото — галерея
+              категории
+            </p>
             <div className="rooms__grid">
               {rooms.map((room) => {
                 const photos = ROOM_PHOTOS[room.id] || [];
