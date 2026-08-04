@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import "@/styles/admin.css";
 
 type Room = {
   id: string;
@@ -25,6 +26,26 @@ type Booking = {
   created_at: string;
 };
 
+type Summary = {
+  today: string;
+  tomorrow: string;
+  check_ins: number;
+  check_outs: number;
+  pending: number;
+  free_today: { id: string; name: string; free: number; total: number }[];
+  pending_list: Booking[];
+  text: string;
+};
+
+type BlockRow = {
+  id: number;
+  category_id: string;
+  category_name: string;
+  day: string;
+  reason: string;
+  note: string;
+};
+
 const MONTHS = [
   "Янв",
   "Фев",
@@ -40,15 +61,24 @@ const MONTHS = [
   "Дек",
 ];
 
-const STATUSES = [
-  "pending",
-  "awaiting_payment",
-  "paid",
-  "confirmed",
-  "checked_in",
-  "checked_out",
-  "rejected",
-  "cancelled",
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Ожидает",
+  awaiting_payment: "Ждём оплату",
+  paid: "Оплачено",
+  confirmed: "Подтверждена",
+  checked_in: "Заселён",
+  checked_out: "Выехал",
+  rejected: "Отклонена",
+  cancelled: "Отменена",
+};
+
+const FILTERS = [
+  { id: "", label: "Все" },
+  { id: "pending", label: "Ожидают" },
+  { id: "confirmed", label: "Подтверждены" },
+  { id: "paid", label: "Оплачены" },
+  { id: "rejected", label: "Отклонены" },
+  { id: "cancelled", label: "Отменены" },
 ];
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -65,20 +95,30 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+type Tab = "summary" | "bookings" | "rooms" | "prices" | "blocks";
+
 export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
   const [user, setUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"bookings" | "rooms" | "prices">("bookings");
+  const [okMsg, setOkMsg] = useState("");
+  const [tab, setTab] = useState<Tab>("summary");
 
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
 
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState("pending");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [priceRoom, setPriceRoom] = useState("");
   const [monthPrices, setMonthPrices] = useState<Record<string, number>>({});
+  const [summary, setSummary] = useState<Summary | null>(null);
+
+  const [blockRoom, setBlockRoom] = useState("");
+  const [blockFrom, setBlockFrom] = useState("");
+  const [blockTo, setBlockTo] = useState("");
+  const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [blockBusy, setBlockBusy] = useState(false);
 
   const refreshMe = useCallback(async () => {
     try {
@@ -105,7 +145,8 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     const data = await api<Room[]>("/api/admin/rooms");
     setRooms(data);
     if (!priceRoom && data[0]) setPriceRoom(data[0].id);
-  }, [priceRoom]);
+    if (!blockRoom && data[0]) setBlockRoom(data[0].id);
+  }, [priceRoom, blockRoom]);
 
   const loadPrices = useCallback(async (roomId: string) => {
     const data = await api<{ prices: Record<string, number> }>(
@@ -114,12 +155,25 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     setMonthPrices(data.prices || {});
   }, []);
 
+  const loadSummary = useCallback(async () => {
+    const data = await api<Summary>("/api/admin/summary");
+    setSummary(data);
+  }, []);
+
+  const loadBlocks = useCallback(async () => {
+    const data = await api<BlockRow[]>("/api/admin/blocks");
+    setBlocks(data);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
+    setErr("");
     if (tab === "bookings") loadBookings().catch((e) => setErr(e.message));
-    if (tab === "rooms" || tab === "prices")
+    if (tab === "rooms" || tab === "prices" || tab === "blocks")
       loadRooms().catch((e) => setErr(e.message));
-  }, [user, tab, filter, loadBookings, loadRooms]);
+    if (tab === "summary") loadSummary().catch((e) => setErr(e.message));
+    if (tab === "blocks") loadBlocks().catch((e) => setErr(e.message));
+  }, [user, tab, filter, loadBookings, loadRooms, loadSummary, loadBlocks]);
 
   useEffect(() => {
     if (user && tab === "prices" && priceRoom) {
@@ -149,12 +203,14 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
 
   async function setStatus(id: number, status: string) {
     setErr("");
+    setOkMsg("");
     try {
       await api(`/api/admin/bookings/${id}/status`, {
         method: "POST",
         body: JSON.stringify({ status }),
       });
       await loadBookings();
+      setOkMsg(`Заявка №${id}: ${STATUS_LABEL[status] || status}`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Ошибка");
     }
@@ -172,6 +228,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
         }),
       });
       await loadRooms();
+      setOkMsg("Номер сохранён");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Ошибка");
     }
@@ -185,172 +242,299 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
         method: "PUT",
         body: JSON.stringify({ prices: monthPrices }),
       });
-      setErr("");
-      alert("Цены сохранены");
+      setOkMsg("Цены сохранены");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Ошибка");
     }
   }
 
+  async function runBlock(action: "block" | "unblock") {
+    if (!blockRoom || !blockFrom || !blockTo) {
+      setErr("Выберите категорию и даты");
+      return;
+    }
+    setBlockBusy(true);
+    setErr("");
+    setOkMsg("");
+    try {
+      const r = await api<{ days: number }>("/api/admin/blocks", {
+        method: "POST",
+        body: JSON.stringify({
+          category_id: blockRoom,
+          date_from: blockFrom,
+          date_to: blockTo,
+          action,
+          reason: "closed",
+          note: "admin",
+        }),
+      });
+      await loadBlocks();
+      setOkMsg(
+        action === "block"
+          ? `Закрыто дней: ${r.days}`
+          : `Открыто (снято блоков): ${r.days}`
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBlockBusy(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
-        Загрузка…
+      <div className="admin">
+        <div className="admin-loading">Загрузка панели…</div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#fbfaf7] px-4">
-        <form
-          onSubmit={login}
-          className="w-full max-w-sm space-y-3 rounded-2xl bg-white p-8 shadow-md"
-        >
-          <h1 className="font-serif text-2xl font-semibold text-[var(--sea)]">
-            Серафинна · панель
-          </h1>
-          <p className="text-xs text-[var(--muted)]">Путь: /{adminPathHint}</p>
-          <label className="block text-sm">
-            Логин
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-            />
-          </label>
-          <label className="block text-sm">
-            Пароль
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
-          {err && <p className="text-sm text-red-600">{err}</p>}
-          <button
-            type="submit"
-            className="w-full rounded-full bg-[var(--sea)] py-2.5 font-semibold text-white"
-          >
-            Войти
-          </button>
-        </form>
+      <div className="admin">
+        <div className="admin-login">
+          <form className="admin-login__card" onSubmit={login}>
+            <h1 className="admin-login__brand">Серафинна</h1>
+            <p className="admin-login__hint">
+              Панель управления · /{adminPathHint}
+            </p>
+            <label className="admin-field">
+              Логин
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+              />
+            </label>
+            <label className="admin-field">
+              Пароль
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            {err && <p className="admin-alert">{err}</p>}
+            <button type="submit" className="admin-btn admin-btn--primary admin-btn--block">
+              Войти
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "summary", label: "Сводка" },
+    { id: "bookings", label: "Заявки" },
+    { id: "blocks", label: "Закрыть даты" },
+    { id: "rooms", label: "Номера" },
+    { id: "prices", label: "Цены" },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#fbfaf7]">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <strong className="text-[var(--sea)]">Серафинна</strong>
-            <span className="ml-2 text-sm text-[var(--muted)]">{user}</span>
+    <div className="admin">
+      <header className="admin-header">
+        <div className="admin-wrap admin-header__inner">
+          <div className="admin-header__brand">
+            <div className="admin-header__title">Серафинна</div>
+            <div className="admin-header__user">панель · {user}</div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["bookings", "Заявки"],
-                ["rooms", "Номера"],
-                ["prices", "Цены по месяцам"],
-              ] as const
-            ).map(([id, label]) => (
+          <nav className="admin-nav">
+            {tabs.map((t) => (
               <button
-                key={id}
+                key={t.id}
                 type="button"
-                onClick={() => setTab(id)}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                  tab === id
-                    ? "bg-[var(--sea)] text-white"
-                    : "bg-[var(--sea-light)] text-[var(--sea-dark)]"
-                }`}
+                className={`admin-nav__btn${tab === t.id ? " is-active" : ""}`}
+                onClick={() => {
+                  setTab(t.id);
+                  setOkMsg("");
+                  setErr("");
+                }}
               >
-                {label}
+                {t.label}
               </button>
             ))}
             <button
               type="button"
+              className="admin-btn admin-btn--ghost"
               onClick={logout}
-              className="rounded-full border px-3 py-1.5 text-sm"
             >
               Выйти
             </button>
-          </div>
+          </nav>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        {err && (
-          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {err}
-          </p>
+      <main className="admin-wrap admin-main">
+        {err && <div className="admin-alert">{err}</div>}
+        {okMsg && <div className="admin-alert admin-alert--ok">{okMsg}</div>}
+
+        {tab === "summary" && (
+          <section>
+            <div className="admin-section-head">
+              <div>
+                <h2>Сводка на сегодня</h2>
+                <p>{summary?.today || "—"} · обновляется при открытии вкладки</p>
+              </div>
+              <button
+                type="button"
+                className="admin-btn admin-btn--soft"
+                onClick={() => loadSummary().catch((e) => setErr(e.message))}
+              >
+                Обновить
+              </button>
+            </div>
+
+            <div className="admin-stats">
+              <div className="admin-stat">
+                <div className="admin-stat__label">Заезд</div>
+                <div className="admin-stat__value">{summary?.check_ins ?? "—"}</div>
+              </div>
+              <div className="admin-stat">
+                <div className="admin-stat__label">Выезд</div>
+                <div className="admin-stat__value">{summary?.check_outs ?? "—"}</div>
+              </div>
+              <div className="admin-stat">
+                <div className="admin-stat__label">Pending</div>
+                <div className="admin-stat__value">{summary?.pending ?? "—"}</div>
+              </div>
+              <div className="admin-stat">
+                <div className="admin-stat__label">Завтра</div>
+                <div className="admin-stat__value" style={{ fontSize: "1.25rem" }}>
+                  {summary?.tomorrow || "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-section-head">
+              <div>
+                <h2>Свободно сегодня</h2>
+              </div>
+            </div>
+            <div className="admin-grid-3">
+              {(summary?.free_today || []).map((r) => (
+                <div key={r.id} className="admin-card" style={{ marginBottom: 0 }}>
+                  <h3 className="admin-card__title" style={{ fontSize: "0.95rem" }}>
+                    {r.name}
+                  </h3>
+                  <p className="admin-card__price">
+                    {r.free} / {r.total}
+                  </p>
+                  <p className="admin-card__meta">свободно из всего</p>
+                </div>
+              ))}
+            </div>
+
+            {(summary?.pending_list?.length || 0) > 0 && (
+              <>
+                <div className="admin-section-head" style={{ marginTop: "1.5rem" }}>
+                  <div>
+                    <h2>Свежие заявки</h2>
+                  </div>
+                </div>
+                {summary!.pending_list.map((b) => (
+                  <article key={b.id} className="admin-card">
+                    <div className="admin-card__top">
+                      <div>
+                        <h3 className="admin-card__title">
+                          №{b.id} · {b.guest_name}
+                        </h3>
+                        <p className="admin-card__meta">
+                          {b.category_name} · {b.check_in} → {b.check_out} · {b.phone}
+                        </p>
+                      </div>
+                      <span className="admin-badge admin-badge--pending">Ожидает</span>
+                    </div>
+                  </article>
+                ))}
+              </>
+            )}
+          </section>
         )}
 
         {tab === "bookings" && (
-          <section className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setFilter("")}
-                className={`rounded-full px-3 py-1 text-sm ${!filter ? "bg-[var(--sea)] text-white" : "bg-white border"}`}
-              >
-                Все
-              </button>
-              {STATUSES.map((s) => (
+          <section>
+            <div className="admin-section-head">
+              <div>
+                <h2>Заявки</h2>
+                <p>Подтверждение закрывает даты в календаре</p>
+              </div>
+            </div>
+            <div className="admin-chips">
+              {FILTERS.map((f) => (
                 <button
-                  key={s}
+                  key={f.id || "all"}
                   type="button"
-                  onClick={() => setFilter(s)}
-                  className={`rounded-full px-3 py-1 text-sm ${filter === s ? "bg-[var(--sea)] text-white" : "bg-white border"}`}
+                  className={`admin-chip${filter === f.id ? " is-active" : ""}`}
+                  onClick={() => setFilter(f.id)}
                 >
-                  {s}
+                  {f.label}
                 </button>
               ))}
             </div>
             {bookings.length === 0 && (
-              <p className="text-[var(--muted)]">Заявок нет</p>
+              <div className="admin-empty">Заявок в этом фильтре нет</div>
             )}
             {bookings.map((b) => (
-              <article
-                key={b.id}
-                className="rounded-2xl border bg-white p-4 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <article key={b.id} className="admin-card">
+                <div className="admin-card__top">
                   <div>
-                    <h3 className="font-semibold">
+                    <h3 className="admin-card__title">
                       №{b.id} · {b.guest_name}
                     </h3>
-                    <p className="text-sm text-[var(--muted)]">
-                      {b.category_name} · {b.check_in} → {b.check_out} ·{" "}
-                      {b.guests} гост. · {b.phone}
+                    <p className="admin-card__meta">
+                      {b.category_name}
+                      <br />
+                      {b.check_in} → {b.check_out} · {b.guests} гост. · {b.phone}
                     </p>
-                    <p className="text-sm font-medium text-[var(--sea)]">
-                      {Number(b.total_price).toLocaleString("ru-RU")} ₽ ·{" "}
-                      <span className="rounded bg-[var(--sea-light)] px-2 py-0.5 text-xs">
-                        {b.status}
+                    <p className="admin-card__price">
+                      {Number(b.total_price).toLocaleString("ru-RU")} ₽{" "}
+                      <span
+                        className={`admin-badge admin-badge--${b.status}`}
+                        style={{ marginLeft: 6 }}
+                      >
+                        {STATUS_LABEL[b.status] || b.status}
                       </span>
                     </p>
                     {b.comment && (
-                      <p className="mt-1 text-sm text-[var(--muted)]">
-                        {b.comment}
-                      </p>
+                      <p className="admin-card__meta">💬 {b.comment}</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {["confirmed", "rejected", "cancelled", "paid"].map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        disabled={b.status === s}
-                        onClick={() => setStatus(b.id, s)}
-                        className="rounded-full border px-2 py-1 text-xs disabled:opacity-40"
-                      >
-                        {s}
-                      </button>
-                    ))}
+                  <div className="admin-actions">
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--ok"
+                      disabled={b.status === "confirmed"}
+                      onClick={() => setStatus(b.id, "confirmed")}
+                    >
+                      Подтвердить
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--warn"
+                      disabled={b.status === "paid"}
+                      onClick={() => setStatus(b.id, "paid")}
+                    >
+                      Оплачено
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--bad"
+                      disabled={b.status === "rejected"}
+                      onClick={() => setStatus(b.id, "rejected")}
+                    >
+                      Отклонить
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--ghost"
+                      disabled={b.status === "cancelled"}
+                      onClick={() => setStatus(b.id, "cancelled")}
+                    >
+                      Отменить
+                    </button>
                   </div>
                 </div>
               </article>
@@ -358,8 +542,109 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
           </section>
         )}
 
+        {tab === "blocks" && (
+          <section>
+            <div className="admin-section-head">
+              <div>
+                <h2>Закрыть / открыть даты</h2>
+                <p>
+                  Закрытые даты не бронируются на сайте (календарь и заявки)
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-card">
+              <div className="admin-block-form">
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  Категория
+                  <select
+                    value={blockRoom}
+                    onChange={(e) => setBlockRoom(e.target.value)}
+                  >
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  С даты
+                  <input
+                    type="date"
+                    value={blockFrom}
+                    onChange={(e) => setBlockFrom(e.target.value)}
+                  />
+                </label>
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  По дату
+                  <input
+                    type="date"
+                    value={blockTo}
+                    onChange={(e) => setBlockTo(e.target.value)}
+                  />
+                </label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--primary"
+                    disabled={blockBusy}
+                    onClick={() => runBlock("block")}
+                  >
+                    Закрыть
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--ghost"
+                    disabled={blockBusy}
+                    onClick={() => runBlock("unblock")}
+                  >
+                    Открыть
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-section-head">
+              <div>
+                <h2>Текущие блокировки</h2>
+              </div>
+            </div>
+            {blocks.length === 0 ? (
+              <div className="admin-empty">Нет закрытых дат</div>
+            ) : (
+              <div className="admin-card">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Дата</th>
+                      <th>Категория</th>
+                      <th>Причина</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blocks.map((b) => (
+                      <tr key={b.id}>
+                        <td>{b.day}</td>
+                        <td>{b.category_name}</td>
+                        <td>{b.reason || "closed"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
         {tab === "rooms" && (
-          <section className="space-y-4">
+          <section>
+            <div className="admin-section-head">
+              <div>
+                <h2>Номера</h2>
+                <p>Базовая цена и количество мест</p>
+              </div>
+            </div>
             {rooms.map((r) => (
               <RoomEditor key={r.id} room={r} onSave={saveRoom} />
             ))}
@@ -367,49 +652,55 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
         )}
 
         {tab === "prices" && (
-          <section className="space-y-4">
-            <label className="block text-sm">
-              Категория
-              <select
-                className="mt-1 w-full max-w-md rounded-lg border px-3 py-2"
-                value={priceRoom}
-                onChange={(e) => setPriceRoom(e.target.value)}
-              >
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {MONTHS.map((label, i) => {
-                const m = String(i + 1);
-                return (
-                  <label key={m} className="text-sm">
-                    {label}
-                    <input
-                      type="number"
-                      className="mt-1 w-full rounded-lg border px-2 py-1.5"
-                      value={monthPrices[m] ?? ""}
-                      onChange={(e) =>
-                        setMonthPrices((prev) => ({
-                          ...prev,
-                          [m]: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                );
-              })}
+          <section>
+            <div className="admin-section-head">
+              <div>
+                <h2>Цены по месяцам</h2>
+                <p>Сезонные цены для расчёта брони</p>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={savePrices}
-              className="rounded-full bg-[var(--sea)] px-6 py-2 font-semibold text-white"
-            >
-              Сохранить цены
-            </button>
+            <div className="admin-card">
+              <label className="admin-field">
+                Категория
+                <select
+                  value={priceRoom}
+                  onChange={(e) => setPriceRoom(e.target.value)}
+                >
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="admin-grid-prices">
+                {MONTHS.map((label, i) => {
+                  const m = String(i + 1);
+                  return (
+                    <label key={m} className="admin-field">
+                      {label}
+                      <input
+                        type="number"
+                        value={monthPrices[m] ?? ""}
+                        onChange={(e) =>
+                          setMonthPrices((prev) => ({
+                            ...prev,
+                            [m]: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                onClick={savePrices}
+              >
+                Сохранить цены
+              </button>
+            </div>
           </section>
         )}
       </main>
@@ -436,32 +727,29 @@ function RoomEditor({
   }, [room]);
 
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <h3 className="font-semibold">{room.name}</h3>
-      <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-        <label>
+    <div className="admin-card">
+      <h3 className="admin-card__title">{room.name}</h3>
+      <div className="admin-grid-3" style={{ marginTop: "0.85rem" }}>
+        <label className="admin-field">
           Базовая цена
           <input
             type="number"
-            className="mt-1 w-full rounded-lg border px-2 py-1.5"
             value={price}
             onChange={(e) => setPrice(Number(e.target.value))}
           />
         </label>
-        <label>
+        <label className="admin-field">
           Всего номеров
           <input
             type="number"
-            className="mt-1 w-full rounded-lg border px-2 py-1.5"
             value={total}
             onChange={(e) => setTotal(Number(e.target.value))}
           />
         </label>
-        <label>
+        <label className="admin-field">
           Свободно
           <input
             type="number"
-            className="mt-1 w-full rounded-lg border px-2 py-1.5"
             value={avail}
             onChange={(e) => setAvail(Number(e.target.value))}
           />
@@ -470,7 +758,8 @@ function RoomEditor({
       <button
         type="button"
         disabled={saving}
-        className="mt-3 rounded-full bg-[var(--sea)] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+        className="admin-btn admin-btn--primary"
+        style={{ marginTop: "0.75rem" }}
         onClick={async () => {
           setSaving(true);
           try {
