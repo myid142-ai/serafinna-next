@@ -6,7 +6,11 @@ export const metadata: Metadata = {
   description:
     "Гостевой дом в Джубге «Серафинна»: снять номер у моря с панорамным видом. Ул. Маяковского, 5А. Парковка, Wi‑Fi. От 4 500 ₽. Рейтинг 4.9.",
   metadataBase: new URL(
-    process.env.PUBLIC_BASE_URL || "https://www.serafinna.ru"
+    (() => {
+      const raw = (process.env.PUBLIC_BASE_URL || "").trim();
+      if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+      return "https://www.serafinna.ru";
+    })()
   ),
   openGraph: {
     title: "Серафинна — гостевой дом в Джубге с видом на море",
