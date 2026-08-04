@@ -29,8 +29,8 @@ const ROOMS = [
     description:
       "Панорамный балкон, двуспальная кровать, ТВ, кондиционер, мини-холодильник.",
     price: 4500,
-    totalRooms: 4,
-    availableRooms: 4,
+    totalRooms: 5,
+    availableRooms: 5,
     sortOrder: 1,
   },
   {
@@ -38,8 +38,8 @@ const ROOMS = [
     name: "Апартаменты с двумя спальнями с видом на море",
     description: "Две спальни, балкон с видом на море, ТВ, кондиционер.",
     price: 7000,
-    totalRooms: 1,
-    availableRooms: 1,
+    totalRooms: 2,
+    availableRooms: 2,
     sortOrder: 2,
   },
   {
@@ -47,8 +47,8 @@ const ROOMS = [
     name: "Семейный номер",
     description: "Двуспальная и односпальная кровати, диван, душ, балкон.",
     price: 5500,
-    totalRooms: 4,
-    availableRooms: 4,
+    totalRooms: 2,
+    availableRooms: 2,
     sortOrder: 3,
   },
 ];
@@ -65,6 +65,7 @@ async function main() {
         description: room.description,
         price: room.price,
         totalRooms: room.totalRooms,
+        availableRooms: room.availableRooms,
         sortOrder: room.sortOrder,
       },
     });
