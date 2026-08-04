@@ -5,7 +5,7 @@ services:
   - type: web
     name: serafinna-next
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     branch: main
     autoDeploy: true
