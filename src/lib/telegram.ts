@@ -193,6 +193,62 @@ export async function notifyNewBooking(booking: {
   return sendTelegramMessage(text, bookingActionKeyboard(booking.id));
 }
 
+/** Owner bot keyboard (reply keyboard) */
+export function mainOwnerKeyboard() {
+  return {
+    keyboard: [
+      [{ text: "☀️ Сводка" }, { text: "🛏️ Брони" }],
+      [{ text: "🚫 Закрыть номера" }, { text: "🔓 Открыть номера" }],
+      [{ text: "ℹ️ Помощь" }],
+    ],
+    resize_keyboard: true,
+  };
+}
+
+export async function sendTelegramDocument(
+  filename: string,
+  content: string | Buffer,
+  caption = ""
+): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
+  const token = botToken();
+  const chats = await recipientChatIds();
+  if (!token) {
+    return { ok: false, skipped: true, error: "TELEGRAM_BOT_TOKEN не задан" };
+  }
+  if (!chats.length) {
+    return { ok: false, skipped: true, error: "Нет получателей Telegram" };
+  }
+
+  let okAny = false;
+  let lastError = "";
+  const blob =
+    typeof content === "string"
+      ? new Blob([content], { type: "application/json" })
+      : new Blob([new Uint8Array(content)], { type: "application/json" });
+
+  for (const chatId of chats) {
+    try {
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      form.append("document", blob, filename);
+      if (caption) form.append("caption", caption.slice(0, 1000));
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendDocument`,
+        { method: "POST", body: form }
+      );
+      const data = (await res.json()) as { ok?: boolean; description?: string };
+      if (data.ok) okAny = true;
+      else lastError = data.description || "sendDocument failed";
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return {
+    ok: okAny,
+    error: okAny ? undefined : lastError || "Не удалось отправить файл",
+  };
+}
+
 /** For Telegram inline buttons — wraps booking status machine */
 export async function setBookingStatusFromTelegram(
   bookingId: number,
