@@ -21,7 +21,7 @@ type CalDay = {
   free: number;
   capacity: number;
   price: number;
-  status: "free" | "partial" | "busy";
+  status: "free" | "partial" | "busy" | "blocked";
 };
 
 const ROOM_PHOTOS: Record<string, string[]> = {
@@ -183,7 +183,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   function onCalDayClick(day: string, status: CalDay["status"]) {
-    if (status === "busy" || day < todayIso) return;
+    if (status === "busy" || status === "blocked" || day < todayIso) return;
     // 1-й клик: заезд + выезд +1 ночь; 2-й клик (позже): выезд
     if (!checkIn || (checkIn && checkOut) || day <= checkIn) {
       setCheckIn(day);
@@ -658,23 +658,30 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                       if (past) cls += " is-past";
                       else if (cell.status === "free") cls += " is-free";
                       else if (cell.status === "partial") cls += " is-partial";
+                      else if (cell.status === "blocked") cls += " is-busy";
                       else cls += " is-busy";
                       if (selected) cls += " is-selected";
                       if (inRange) cls += " is-in-range";
                       const dayNum = Number(String(cell.day).slice(8, 10));
                       const title = past
                         ? "Прошедшая дата"
-                        : cell.status === "busy"
-                          ? "Занято"
-                          : cell.status === "partial"
-                            ? `Свободно: ${cell.free} из ${cell.capacity}`
-                            : `Свободно · ${formatPrice(Number(cell.price) || 0)}`;
+                        : cell.status === "blocked"
+                          ? "Закрыто"
+                          : cell.status === "busy"
+                            ? "Занято (бронь)"
+                            : cell.status === "partial"
+                              ? `Свободно: ${cell.free} из ${cell.capacity}`
+                              : `Свободно · ${formatPrice(Number(cell.price) || 0)}`;
                       return (
                         <button
                           key={cell.day}
                           type="button"
                           className={cls}
-                          disabled={past || cell.status === "busy"}
+                          disabled={
+                            past ||
+                            cell.status === "busy" ||
+                            cell.status === "blocked"
+                          }
                           title={title}
                           onClick={() => onCalDayClick(cell.day, cell.status)}
                         >

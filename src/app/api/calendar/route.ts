@@ -93,15 +93,26 @@ export async function GET(req: NextRequest) {
       const capacity =
         inventory[day] !== undefined ? inventory[day] : room.totalRooms;
       const isBlocked = blocked.has(day);
+      const occupiedCount = occupied[day] || 0;
       const free = isBlocked
         ? 0
-        : Math.max(0, capacity - (occupied[day] || 0));
+        : Math.max(0, capacity - occupiedCount);
       const m = month;
       const price = monthlyPrices[m] ?? room.price;
-      let status: "free" | "partial" | "busy" = "free";
-      if (capacity <= 0 || free <= 0 || isBlocked) status = "busy";
+      // free | partial | busy (no free) | blocked (manual close)
+      let status: "free" | "partial" | "busy" | "blocked" = "free";
+      if (isBlocked) status = "blocked";
+      else if (capacity <= 0 || free <= 0) status = "busy";
       else if (free < capacity) status = "partial";
-      days.push({ day, free, capacity, price, status });
+      days.push({
+        day,
+        free,
+        capacity,
+        occupied: occupiedCount,
+        blocked: isBlocked,
+        price,
+        status,
+      });
     }
 
     // Mon=0 … Sun=6

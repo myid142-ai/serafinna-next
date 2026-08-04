@@ -46,6 +46,32 @@ type BlockRow = {
   note: string;
 };
 
+type CalDay = {
+  day: string;
+  free: number;
+  capacity: number;
+  occupied?: number;
+  blocked?: boolean;
+  status: "free" | "partial" | "busy" | "blocked";
+  price: number;
+};
+
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const MONTH_NAMES = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
 const MONTHS = [
   "Янв",
   "Фев",
@@ -119,6 +145,12 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
   const [blockTo, setBlockTo] = useState("");
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [blockBusy, setBlockBusy] = useState(false);
+  const nowCal = new Date();
+  const [calYear, setCalYear] = useState(nowCal.getFullYear());
+  const [calMonth, setCalMonth] = useState(nowCal.getMonth() + 1);
+  const [calDays, setCalDays] = useState<CalDay[]>([]);
+  const [calFirstWd, setCalFirstWd] = useState(0);
+  const [calLoading, setCalLoading] = useState(false);
 
   const refreshMe = useCallback(async () => {
     try {
@@ -165,6 +197,26 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     setBlocks(data);
   }, []);
 
+  const loadCalendar = useCallback(async () => {
+    if (!blockRoom) return;
+    setCalLoading(true);
+    try {
+      const q = new URLSearchParams({
+        year: String(calYear),
+        month: String(calMonth),
+        category_id: blockRoom,
+      });
+      const data = await api<{
+        days: CalDay[];
+        first_weekday: number;
+      }>(`/api/calendar?${q}`);
+      setCalDays(Array.isArray(data.days) ? data.days : []);
+      setCalFirstWd(Number(data.first_weekday) || 0);
+    } finally {
+      setCalLoading(false);
+    }
+  }, [blockRoom, calYear, calMonth]);
+
   useEffect(() => {
     if (!user) return;
     setErr("");
@@ -174,6 +226,12 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     if (tab === "summary") loadSummary().catch((e) => setErr(e.message));
     if (tab === "blocks") loadBlocks().catch((e) => setErr(e.message));
   }, [user, tab, filter, loadBookings, loadRooms, loadSummary, loadBlocks]);
+
+  useEffect(() => {
+    if (user && tab === "blocks" && blockRoom) {
+      loadCalendar().catch((e) => setErr(e.message));
+    }
+  }, [user, tab, blockRoom, calYear, calMonth, loadCalendar]);
 
   useEffect(() => {
     if (user && tab === "prices" && priceRoom) {
@@ -248,8 +306,10 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     }
   }
 
-  async function runBlock(action: "block" | "unblock") {
-    if (!blockRoom || !blockFrom || !blockTo) {
+  async function runBlock(action: "block" | "unblock", from?: string, to?: string) {
+    const dateFrom = from || blockFrom;
+    const dateTo = to || blockTo;
+    if (!blockRoom || !dateFrom || !dateTo) {
       setErr("Выберите категорию и даты");
       return;
     }
@@ -261,14 +321,14 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
         method: "POST",
         body: JSON.stringify({
           category_id: blockRoom,
-          date_from: blockFrom,
-          date_to: blockTo,
+          date_from: dateFrom,
+          date_to: dateTo,
           action,
           reason: "closed",
           note: "admin",
         }),
       });
-      await loadBlocks();
+      await Promise.all([loadBlocks(), loadCalendar()]);
       setOkMsg(
         action === "block"
           ? `Закрыто дней: ${r.days}`
@@ -279,6 +339,32 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     } finally {
       setBlockBusy(false);
     }
+  }
+
+  /** Click day: toggle manual close. Booked days also can be force-closed. */
+  async function onCalDayClick(d: CalDay) {
+    if (blockBusy) return;
+    if (d.blocked) {
+      await runBlock("unblock", d.day, d.day);
+      return;
+    }
+    // free / partial / busy (booked) → close for this day
+    await runBlock("block", d.day, d.day);
+  }
+
+  function shiftMonth(delta: number) {
+    let y = calYear;
+    let m = calMonth + delta;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setCalYear(y);
+    setCalMonth(m);
   }
 
   if (loading) {
@@ -546,28 +632,122 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
           <section>
             <div className="admin-section-head">
               <div>
-                <h2>Закрыть / открыть даты</h2>
+                <h2>Календарь · закрыть даты</h2>
                 <p>
-                  Закрытые даты не бронируются на сайте (календарь и заявки)
+                  Зелёный — свободно · жёлтый — часть занята бронью · красный —
+                  всё занято бронью · серый — вручную закрыто. Клик по дню:
+                  закрыть / открыть.
                 </p>
               </div>
             </div>
 
             <div className="admin-card">
+              <label className="admin-field">
+                Категория номера
+                <select
+                  value={blockRoom}
+                  onChange={(e) => setBlockRoom(e.target.value)}
+                >
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="admin-cal-nav">
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost"
+                  onClick={() => shiftMonth(-1)}
+                >
+                  ←
+                </button>
+                <h3 className="admin-cal-nav__title">
+                  {MONTH_NAMES[calMonth - 1]} {calYear}
+                  {calLoading ? " …" : ""}
+                </h3>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost"
+                  onClick={() => shiftMonth(1)}
+                >
+                  →
+                </button>
+              </div>
+
+              <div className="admin-cal__legend">
+                <span>
+                  <i className="admin-cal__dot admin-cal__dot--free" /> свободно
+                </span>
+                <span>
+                  <i className="admin-cal__dot admin-cal__dot--partial" />{" "}
+                  часть занята (бронь)
+                </span>
+                <span>
+                  <i className="admin-cal__dot admin-cal__dot--busy" />{" "}
+                  занято бронью
+                </span>
+                <span>
+                  <i className="admin-cal__dot admin-cal__dot--blocked" />{" "}
+                  закрыто вручную
+                </span>
+              </div>
+
+              <div className="admin-cal">
+                {WEEKDAYS.map((w) => (
+                  <div key={w} className="admin-cal__head">
+                    {w}
+                  </div>
+                ))}
+                {Array.from({ length: calFirstWd }).map((_, i) => (
+                  <button
+                    key={`pad-${i}`}
+                    type="button"
+                    className="admin-cal__day"
+                    disabled
+                  />
+                ))}
+                {calDays.map((d) => {
+                  const num = Number(d.day.slice(8, 10));
+                  const occ = d.occupied ?? Math.max(0, d.capacity - d.free);
+                  let tag = `${d.free}/${d.capacity}`;
+                  if (d.status === "blocked") tag = "закрыто";
+                  else if (d.status === "busy") tag = `бронь ${occ}`;
+                  else if (d.status === "partial") tag = `бронь ${occ}`;
+                  return (
+                    <button
+                      key={d.day}
+                      type="button"
+                      className={`admin-cal__day is-${d.status}`}
+                      disabled={blockBusy}
+                      title={
+                        d.blocked
+                          ? "Клик — открыть дату"
+                          : d.status === "busy" || d.status === "partial"
+                            ? "Есть бронь. Клик — дополнительно закрыть вручную"
+                            : "Клик — закрыть дату"
+                      }
+                      onClick={() => onCalDayClick(d)}
+                    >
+                      <span className="admin-cal__num">{num}</span>
+                      <span className="admin-cal__tag">{tag}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="admin-section-head">
+              <div>
+                <h2>Период сразу</h2>
+                <p>Закрыть или открыть диапазон дат</p>
+              </div>
+            </div>
+
+            <div className="admin-card">
               <div className="admin-block-form">
-                <label className="admin-field" style={{ marginBottom: 0 }}>
-                  Категория
-                  <select
-                    value={blockRoom}
-                    onChange={(e) => setBlockRoom(e.target.value)}
-                  >
-                    {rooms.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="admin-field" style={{ marginBottom: 0 }}>
                   С даты
                   <input
@@ -591,7 +771,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
                     disabled={blockBusy}
                     onClick={() => runBlock("block")}
                   >
-                    Закрыть
+                    Закрыть период
                   </button>
                   <button
                     type="button"
@@ -599,7 +779,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
                     disabled={blockBusy}
                     onClick={() => runBlock("unblock")}
                   >
-                    Открыть
+                    Открыть период
                   </button>
                 </div>
               </div>
@@ -607,11 +787,11 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
 
             <div className="admin-section-head">
               <div>
-                <h2>Текущие блокировки</h2>
+                <h2>Список ручных блокировок</h2>
               </div>
             </div>
             {blocks.length === 0 ? (
-              <div className="admin-empty">Нет закрытых дат</div>
+              <div className="admin-empty">Нет закрытых вручную дат</div>
             ) : (
               <div className="admin-card">
                 <table className="admin-table">
