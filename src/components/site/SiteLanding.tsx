@@ -24,21 +24,34 @@ type CalDay = {
   status: "free" | "partial" | "busy" | "blocked";
 };
 
+/**
+ * Photos always from Vercel CDN host — custom domain path often truncates
+ * large JPEGs mid-transfer on some RU networks/VPN.
+ */
+const ASSET_HOST = (
+  process.env.NEXT_PUBLIC_ASSET_HOST || "https://serafinna.vercel.app"
+).replace(/\/$/, "");
+
+function assetUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${ASSET_HOST}${p}`;
+}
+
 const ROOM_PHOTOS: Record<string, string[]> = {
   "double-sea": Array.from({ length: 7 }, (_, i) =>
-    `/images/rooms/double-sea/${String(i + 1).padStart(2, "0")}.jpg`
+    assetUrl(`/images/rooms/double-sea/${String(i + 1).padStart(2, "0")}.jpg`)
   ),
   "apartments-2br": Array.from({ length: 7 }, (_, i) =>
-    `/images/rooms/apartments-2br/${String(i + 1).padStart(2, "0")}.jpg`
+    assetUrl(`/images/rooms/apartments-2br/${String(i + 1).padStart(2, "0")}.jpg`)
   ),
   family: Array.from({ length: 7 }, (_, i) =>
-    `/images/rooms/family/${String(i + 1).padStart(2, "0")}.jpg`
+    assetUrl(`/images/rooms/family/${String(i + 1).padStart(2, "0")}.jpg`)
   ),
 };
 
 const GALLERY = Array.from({ length: 35 }, (_, i) => {
   const n = String(i + 1).padStart(2, "0");
-  return `/images/photo-${n}.jpg`;
+  return assetUrl(`/images/photo-${n}.jpg`);
 });
 
 const MONTH_NAMES = [
@@ -329,7 +342,9 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
         <section className="hero">
           <div
             className="hero__bg"
-            style={{ backgroundImage: "url('/images/photo-08.jpg')" }}
+            style={{
+              backgroundImage: `url('${assetUrl("/images/photo-08.jpg")}')`,
+            }}
           />
           <div className="hero__overlay" />
           <div className="container hero__content">
@@ -393,9 +408,9 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               </div>
             </div>
             <div className="about__photos">
-              <img src="/images/photo-17.jpg" alt="Вид на бухту" className="about__img about__img--main" loading="lazy" />
-              <img src="/images/photo-24.jpg" alt="Терраса" className="about__img about__img--side" loading="lazy" />
-              <img src="/images/photo-28.jpg" alt="Территория" className="about__img about__img--side" loading="lazy" />
+              <img src={assetUrl("/images/photo-17.jpg")} alt="Вид на бухту" className="about__img about__img--main" loading="lazy" />
+              <img src={assetUrl("/images/photo-24.jpg")} alt="Терраса" className="about__img about__img--side" loading="lazy" />
+              <img src={assetUrl("/images/photo-28.jpg")} alt="Территория" className="about__img about__img--side" loading="lazy" />
             </div>
           </div>
         </section>
@@ -409,11 +424,11 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
             </p>
             <div className="proof__grid">
               {[
-                ["/images/photo-14.jpg", "Вид с балкона на бухту и пляж"],
-                ["/images/photo-23.jpg", "Общая кухня — всё для самостоятельного питания"],
-                ["/images/photo-26.jpg", "Мангальная зона для вечерних посиделок"],
-                ["/images/photo-28.jpg", "Парковка на закрытой территории"],
-                ["/images/photo-17.jpg", "Море рядом — спуск к пляжу ~5 минут"],
+                [assetUrl("/images/photo-14.jpg"), "Вид с балкона на бухту и пляж"],
+                [assetUrl("/images/photo-23.jpg"), "Общая кухня — всё для самостоятельного питания"],
+                [assetUrl("/images/photo-26.jpg"), "Мангальная зона для вечерних посиделок"],
+                [assetUrl("/images/photo-28.jpg"), "Парковка на закрытой территории"],
+                [assetUrl("/images/photo-17.jpg"), "Море рядом — спуск к пляжу ~5 минут"],
               ].map(([src, cap]) => (
                 <figure className="proof-card" key={src}>
                   <img src={src} alt={cap} loading="lazy" />
