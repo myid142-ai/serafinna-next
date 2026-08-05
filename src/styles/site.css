@@ -14,9 +14,8 @@
   --shadow-soft: 0 10px 28px rgba(8, 45, 52, 0.06);
   --radius: 20px;
   --radius-sm: 14px;
-  /* System fonts only — fastest on cellular + VPN (no woff2 round-trips) */
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font: var(--font-manrope), "Manrope", system-ui, sans-serif;
+  --serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
 }
 
 *,
@@ -41,6 +40,9 @@ body {
 img {
   max-width: 100%;
   display: block;
+  /* Sharper downscale on retina */
+  image-rendering: auto;
+  -webkit-backface-visibility: hidden;
 }
 
 a {
@@ -762,8 +764,9 @@ a:hover {
 
 .room-card__main img {
   width: 100%;
-  height: 220px;
+  height: 260px;
   object-fit: cover;
+  object-position: center;
   transition: transform 0.35s ease;
 }
 

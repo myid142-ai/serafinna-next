@@ -1,10 +1,21 @@
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "@/styles/site.css";
 
-/**
- * No next/font — system fonts. Asset host = vercel.app for static files
- * (custom .ru path often stalls large bodies on LTE+VPN).
- */
+const manrope = Manrope({
+  subsets: ["cyrillic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["cyrillic", "latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
 const assetHost = (
   process.env.NEXT_PUBLIC_ASSET_HOST || "https://serafinna.vercel.app"
 ).replace(/\/$/, "");
@@ -41,7 +52,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" className={`${manrope.variable} ${cormorant.variable}`}>
       <head>
         <link rel="preconnect" href={assetHost} crossOrigin="anonymous" />
         <link rel="dns-prefetch" href={assetHost} />
