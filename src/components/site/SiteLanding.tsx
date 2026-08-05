@@ -74,9 +74,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [rooms] = useState(initialRooms);
-  // Mobile / VPN: minimal images first; thumbs only on wider screens after mount
-  const [galleryCount, setGalleryCount] = useState(2);
-  const [showRoomThumbs, setShowRoomThumbs] = useState(false);
+  const [galleryCount, setGalleryCount] = useState(12);
   const [mapVisible, setMapVisible] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,15 +123,6 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Room thumbs cost extra requests on LTE+VPN — only desktop after hydrate
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 761px)");
-    const apply = () => setShowRoomThumbs(mq.matches);
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
   }, []);
 
   // Yandex map iframe is heavy on mobile — mount only when section is near viewport
@@ -560,7 +549,6 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                         />
                         <span className="room-card__count">{photos.length} фото</span>
                       </button>
-                      {showRoomThumbs && (
                       <div className="room-card__thumbs" role="list">
                         {photos.slice(0, 4).map((src, i) => (
                           <button
@@ -576,7 +564,6 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                           </button>
                         ))}
                       </div>
-                      )}
                     </div>
                     <div className="room-card__body">
                       <h3>{room.name}</h3>
@@ -1022,7 +1009,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               <button
                 className="btn btn--outline"
                 type="button"
-                onClick={() => setGalleryCount((c) => Math.min(c + 8, GALLERY.length))}
+                onClick={() => setGalleryCount((c) => Math.min(c + 12, GALLERY.length))}
               >
                 Показать ещё фото
               </button>
