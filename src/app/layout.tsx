@@ -1,23 +1,10 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "@/styles/site.css";
 
-// Fewer weights = fewer woff2 on mobile first load (~half the font bytes)
-const manrope = Manrope({
-  subsets: ["cyrillic", "latin"],
-  weight: ["400", "600"],
-  variable: "--font-manrope",
-  display: "swap",
-});
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["cyrillic", "latin"],
-  weight: ["600", "700"],
-  variable: "--font-cormorant",
-  display: "swap",
-  preload: false, // body text first; headings swap in after
-});
-
+/**
+ * No next/font / Google Fonts — on iPhone LTE+VPN every extra TLS request and
+ * woff2 file delays first paint by seconds. System UI fonts paint immediately.
+ */
 const assetHost = (
   process.env.NEXT_PUBLIC_ASSET_HOST || "https://serafinna.vercel.app"
 ).replace(/\/$/, "");
@@ -54,17 +41,14 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru" className={`${manrope.variable} ${cormorant.variable}`}>
+    <html lang="ru">
       <head>
-        {/* Preconnect to static/asset CDN (JS/CSS/photos on .vercel.app) */}
         <link rel="preconnect" href={assetHost} crossOrigin="anonymous" />
         <link rel="dns-prefetch" href={assetHost} />
-        {/* LCP hero background — same host as other images */}
         <link
           rel="preload"
           as="image"
           href={`${assetHost}/images/photo-08.jpg`}
-          fetchPriority="high"
         />
       </head>
       <body>{children}</body>

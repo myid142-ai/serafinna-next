@@ -14,9 +14,9 @@
   --shadow-soft: 0 10px 28px rgba(8, 45, 52, 0.06);
   --radius: 20px;
   --radius-sm: 14px;
-  /* next/font sets --font-manrope / --font-cormorant (self-hosted, no Google runtime) */
-  --font: var(--font-manrope), "Manrope", system-ui, sans-serif;
-  --serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  /* System fonts only — fastest on cellular + VPN (no woff2 round-trips) */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 *,
