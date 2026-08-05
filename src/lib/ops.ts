@@ -150,6 +150,58 @@ export async function unblockDates(
   return res.count;
 }
 
+/**
+ * Set how many physical rooms of a category are sellable on each day
+ * (inclusive range). Example: total 5, set 3 → two rooms closed for sale.
+ * Pass null / omit clear to remove overrides (back to totalRooms).
+ */
+export async function setInventoryDates(
+  categoryId: string,
+  dateFrom: string,
+  dateTo: string,
+  roomsAvailable: number
+): Promise<number> {
+  const room = await prisma.room.findUnique({ where: { id: categoryId } });
+  if (!room) throw new Error("Категория не найдена");
+
+  const cap = Math.max(0, Math.min(room.totalRooms, Math.floor(roomsAvailable)));
+  const days = inclusiveDays(dateFrom, dateTo);
+  let n = 0;
+
+  for (const day of days) {
+    if (cap >= room.totalRooms) {
+      // Full capacity — remove override
+      await prisma.dateInventory.deleteMany({
+        where: { categoryId, day },
+      });
+    } else {
+      await prisma.dateInventory.upsert({
+        where: { categoryId_day: { categoryId, day } },
+        create: { categoryId, day, roomsAvailable: cap },
+        update: { roomsAvailable: cap },
+      });
+    }
+    // Partial/full inventory control replaces manual full-block for these days
+    if (cap > 0) {
+      await prisma.dateBlock.deleteMany({ where: { categoryId, day } });
+    }
+    n++;
+  }
+  return n;
+}
+
+export async function clearInventoryDates(
+  categoryId: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<number> {
+  const days = inclusiveDays(dateFrom, dateTo);
+  const res = await prisma.dateInventory.deleteMany({
+    where: { categoryId, day: { in: days } },
+  });
+  return res.count;
+}
+
 function inclusiveDays(from: string, to: string): string[] {
   if (to < from) return [];
   if (to === from) return [from];

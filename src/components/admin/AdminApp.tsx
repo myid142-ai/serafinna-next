@@ -46,6 +46,15 @@ type BlockRow = {
   note: string;
 };
 
+type InvRow = {
+  category_id: string;
+  category_name: string;
+  day: string;
+  rooms_available: number;
+  total_rooms: number | null;
+  closed_rooms: number | null;
+};
+
 type CalDay = {
   day: string;
   free: number;
@@ -144,6 +153,9 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
   const [blockFrom, setBlockFrom] = useState("");
   const [blockTo, setBlockTo] = useState("");
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [inventoryRows, setInventoryRows] = useState<InvRow[]>([]);
+  /** How many rooms to leave sellable on the period (0 = none). */
+  const [invAvailable, setInvAvailable] = useState(0);
   const [blockBusy, setBlockBusy] = useState(false);
   const nowCal = new Date();
   const [calYear, setCalYear] = useState(nowCal.getFullYear());
@@ -197,6 +209,14 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     setBlocks(data);
   }, []);
 
+  const loadInventory = useCallback(async () => {
+    const q = blockRoom
+      ? `?category_id=${encodeURIComponent(blockRoom)}`
+      : "";
+    const data = await api<InvRow[]>(`/api/admin/inventory${q}`);
+    setInventoryRows(data);
+  }, [blockRoom]);
+
   const loadCalendar = useCallback(async () => {
     if (!blockRoom) return;
     setCalLoading(true);
@@ -217,6 +237,9 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     }
   }, [blockRoom, calYear, calMonth]);
 
+  const selectedRoomTotal =
+    rooms.find((r) => r.id === blockRoom)?.total_rooms ?? 0;
+
   useEffect(() => {
     if (!user) return;
     setErr("");
@@ -224,14 +247,34 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     if (tab === "rooms" || tab === "prices" || tab === "blocks")
       loadRooms().catch((e) => setErr(e.message));
     if (tab === "summary") loadSummary().catch((e) => setErr(e.message));
-    if (tab === "blocks") loadBlocks().catch((e) => setErr(e.message));
-  }, [user, tab, filter, loadBookings, loadRooms, loadSummary, loadBlocks]);
+    if (tab === "blocks") {
+      loadBlocks().catch((e) => setErr(e.message));
+      loadInventory().catch((e) => setErr(e.message));
+    }
+  }, [
+    user,
+    tab,
+    filter,
+    loadBookings,
+    loadRooms,
+    loadSummary,
+    loadBlocks,
+    loadInventory,
+  ]);
 
   useEffect(() => {
     if (user && tab === "blocks" && blockRoom) {
       loadCalendar().catch((e) => setErr(e.message));
+      loadInventory().catch((e) => setErr(e.message));
     }
-  }, [user, tab, blockRoom, calYear, calMonth, loadCalendar]);
+  }, [user, tab, blockRoom, calYear, calMonth, loadCalendar, loadInventory]);
+
+  useEffect(() => {
+    const total = rooms.find((r) => r.id === blockRoom)?.total_rooms;
+    if (total != null && total > 0) {
+      setInvAvailable((prev) => (prev > total ? total : prev));
+    }
+  }, [blockRoom, rooms]);
 
   useEffect(() => {
     if (user && tab === "prices" && priceRoom) {
@@ -328,11 +371,11 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
           note: "admin",
         }),
       });
-      await Promise.all([loadBlocks(), loadCalendar()]);
+      await Promise.all([loadBlocks(), loadCalendar(), loadInventory()]);
       setOkMsg(
         action === "block"
-          ? `Закрыто дней: ${r.days}`
-          : `Открыто (снято блоков): ${r.days}`
+          ? `Полностью закрыто дней: ${r.days}`
+          : `Снято полных блоков: ${r.days}`
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Ошибка");
@@ -341,14 +384,60 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
     }
   }
 
-  /** Click day: toggle manual close. Booked days also can be force-closed. */
+  /** Set sellable room count for period (partial close). */
+  async function runInventory(action: "set" | "clear") {
+    if (!blockRoom || !blockFrom || !blockTo) {
+      setErr("Выберите категорию и даты (с — по)");
+      return;
+    }
+    if (action === "set" && invAvailable < 0) {
+      setErr("Укажите доступное число номеров ≥ 0");
+      return;
+    }
+    setBlockBusy(true);
+    setErr("");
+    setOkMsg("");
+    try {
+      const r = await api<{
+        days: number;
+        rooms_available?: number;
+        closed_rooms?: number;
+        total_rooms?: number;
+      }>("/api/admin/inventory", {
+        method: "POST",
+        body: JSON.stringify({
+          category_id: blockRoom,
+          date_from: blockFrom,
+          date_to: blockTo,
+          action,
+          rooms_available: invAvailable,
+        }),
+      });
+      await Promise.all([loadBlocks(), loadCalendar(), loadInventory()]);
+      if (action === "clear") {
+        setOkMsg(
+          `Сброшен лимит на ${r.days} дн. — снова все ${selectedRoomTotal} номеров`
+        );
+      } else {
+        const closed = r.closed_rooms ?? Math.max(0, selectedRoomTotal - invAvailable);
+        setOkMsg(
+          `На ${r.days} дн.: доступно ${r.rooms_available ?? invAvailable} из ${r.total_rooms ?? selectedRoomTotal} (закрыто ${closed})`
+        );
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBlockBusy(false);
+    }
+  }
+
+  /** Click day: toggle full manual close. */
   async function onCalDayClick(d: CalDay) {
     if (blockBusy) return;
     if (d.blocked) {
       await runBlock("unblock", d.day, d.day);
       return;
     }
-    // free / partial / busy (booked) → close for this day
     await runBlock("block", d.day, d.day);
   }
 
@@ -414,7 +503,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
   const tabs: { id: Tab; label: string }[] = [
     { id: "summary", label: "Сводка" },
     { id: "bookings", label: "Заявки" },
-    { id: "blocks", label: "Закрыть даты" },
+    { id: "blocks", label: "Календарь / закрытие" },
     { id: "rooms", label: "Номера" },
     { id: "prices", label: "Цены" },
   ];
@@ -632,11 +721,11 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
           <section>
             <div className="admin-section-head">
               <div>
-                <h2>Календарь · закрыть даты</h2>
+                <h2>Календарь · закрытие номеров</h2>
                 <p>
-                  Зелёный — свободно · жёлтый — часть занята бронью · красный —
-                  всё занято бронью · серый — вручную закрыто. Клик по дню:
-                  закрыть / открыть.
+                  В ячейке «свободно/вместимость». Можно закрыть{" "}
+                  <strong>все</strong> номера на день (клик) или оставить только{" "}
+                  <strong>N номеров</strong> на период (форма ниже).
                 </p>
               </div>
             </div>
@@ -741,8 +830,86 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
 
             <div className="admin-section-head">
               <div>
-                <h2>Период сразу</h2>
-                <p>Закрыть или открыть диапазон дат</p>
+                <h2>Закрыть количество номеров на даты</h2>
+                <p>
+                  Пример: в категории {selectedRoomTotal || "N"} номеров —
+                  оставьте доступными 3, тогда 2 будут закрыты на выбранный
+                  период. Гости увидят меньше свободных мест в календаре.
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-card">
+              <div className="admin-block-form">
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  С даты
+                  <input
+                    type="date"
+                    value={blockFrom}
+                    onChange={(e) => setBlockFrom(e.target.value)}
+                  />
+                </label>
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  По дату
+                  <input
+                    type="date"
+                    value={blockTo}
+                    onChange={(e) => setBlockTo(e.target.value)}
+                  />
+                </label>
+                <label className="admin-field" style={{ marginBottom: 0 }}>
+                  Доступно номеров
+                  <input
+                    type="number"
+                    min={0}
+                    max={selectedRoomTotal || 99}
+                    value={invAvailable}
+                    onChange={(e) =>
+                      setInvAvailable(Math.max(0, Number(e.target.value) || 0))
+                    }
+                  />
+                </label>
+              </div>
+              <p className="admin-hint" style={{ marginTop: 12 }}>
+                В категории сейчас: <strong>{selectedRoomTotal}</strong> номеров.
+                {selectedRoomTotal > 0 && (
+                  <>
+                    {" "}
+                    При «доступно {invAvailable}» будет закрыто{" "}
+                    <strong>
+                      {Math.max(0, selectedRoomTotal - invAvailable)}
+                    </strong>
+                    .
+                  </>
+                )}
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--primary"
+                  disabled={blockBusy}
+                  onClick={() => runInventory("set")}
+                >
+                  Применить лимит на период
+                </button>
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost"
+                  disabled={blockBusy}
+                  onClick={() => runInventory("clear")}
+                >
+                  Сбросить лимит (все номера)
+                </button>
+              </div>
+            </div>
+
+            <div className="admin-section-head">
+              <div>
+                <h2>Закрыть полностью (все номера)</h2>
+                <p>
+                  Полная блокировка дат — ни один номер категории нельзя
+                  забронировать. Клик по дню в календаре делает то же самое.
+                </p>
               </div>
             </div>
 
@@ -771,7 +938,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
                     disabled={blockBusy}
                     onClick={() => runBlock("block")}
                   >
-                    Закрыть период
+                    Закрыть всё на период
                   </button>
                   <button
                     type="button"
@@ -779,7 +946,7 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
                     disabled={blockBusy}
                     onClick={() => runBlock("unblock")}
                   >
-                    Открыть период
+                    Снять полную блокировку
                   </button>
                 </div>
               </div>
@@ -787,11 +954,50 @@ export function AdminApp({ adminPathHint }: { adminPathHint: string }) {
 
             <div className="admin-section-head">
               <div>
-                <h2>Список ручных блокировок</h2>
+                <h2>Лимиты по количеству</h2>
+              </div>
+            </div>
+            {inventoryRows.length === 0 ? (
+              <div className="admin-empty">
+                Нет дней с урезанным числом номеров
+              </div>
+            ) : (
+              <div className="admin-card">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Дата</th>
+                      <th>Категория</th>
+                      <th>Доступно</th>
+                      <th>Закрыто</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryRows.map((row) => (
+                      <tr key={`${row.category_id}-${row.day}`}>
+                        <td>{row.day}</td>
+                        <td>{row.category_name}</td>
+                        <td>
+                          {row.rooms_available}
+                          {row.total_rooms != null
+                            ? ` / ${row.total_rooms}`
+                            : ""}
+                        </td>
+                        <td>{row.closed_rooms ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="admin-section-head">
+              <div>
+                <h2>Полные блокировки</h2>
               </div>
             </div>
             {blocks.length === 0 ? (
-              <div className="admin-empty">Нет закрытых вручную дат</div>
+              <div className="admin-empty">Нет полностью закрытых дат</div>
             ) : (
               <div className="admin-card">
                 <table className="admin-table">
