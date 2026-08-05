@@ -1,12 +1,16 @@
-import { HomeStatic } from "@/components/site/HomeStatic";
+import { SiteLanding } from "@/components/site/SiteLanding";
 import { prisma } from "@/lib/db";
 import { roomJson } from "@/lib/rooms";
 
-// Tiny static HTML (no client island) — survives LTE+VPN body stalls on .ru
 export const dynamic = "force-static";
 export const revalidate = 120;
 
-export default async function HomePage() {
+export const metadata = {
+  title: "Серафинна — полная версия сайта",
+  robots: { index: false, follow: true },
+};
+
+export default async function FullSitePage() {
   const rows = await prisma.room.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: { monthlyPrices: true },
@@ -16,5 +20,5 @@ export default async function HomePage() {
     for (const mp of r.monthlyPrices) monthly[mp.month] = mp.price;
     return roomJson(r, null, monthly);
   });
-  return <HomeStatic rooms={rooms} />;
+  return <SiteLanding initialRooms={rooms} />;
 }

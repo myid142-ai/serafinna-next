@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "@/styles/site.css";
 
 /**
- * No next/font / Google Fonts — on iPhone LTE+VPN every extra TLS request and
- * woff2 file delays first paint by seconds. System UI fonts paint immediately.
+ * No next/font — system fonts. Asset host = vercel.app for static files
+ * (custom .ru path often stalls large bodies on LTE+VPN).
  */
 const assetHost = (
   process.env.NEXT_PUBLIC_ASSET_HOST || "https://serafinna.vercel.app"
