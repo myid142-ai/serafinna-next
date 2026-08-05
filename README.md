@@ -1,12 +1,26 @@
 # Serafinna — Next.js
 
-Полный перенос с Flask. **MVP (Phase 0–2 in progress):** витрина + public API + SQLite/Neon.
+Гостевой дом: витрина, бронирование, админка, Telegram.
 
 ## Стек
 
-- Next.js (App Router) + TypeScript + Tailwind
-- Prisma + SQLite (local) / Neon Postgres (prod)
-- iron-session (admin — next phase)
+- Next.js (App Router) + TypeScript
+- Prisma + Postgres (Neon / любой)
+- iron-session (админка)
+
+## Деплой и VPN / телефон
+
+Чтобы сайт стабильно открывался с LTE и VPN («Щука»):
+
+1. **Сейчас:** [Cloudflare + Vercel](./deploy/cloudflare.md) — оранжевое облако  
+2. **Надёжно:** [VPS в РФ + Docker](./deploy/vps-ru.md)  
+3. Обзор: **[DEPLOY.md](./DEPLOY.md)**
+
+```bash
+# РФ VPS
+cp .env.example .env.production   # NEXT_PUBLIC_ASSET_PREFIX=0
+docker compose up -d --build
+```
 
 ## Быстрый старт
 

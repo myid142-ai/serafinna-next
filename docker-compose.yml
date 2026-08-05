@@ -1,0 +1,39 @@
+# Serafinna on a Russian (or any) VPS
+# Usage:
+#   cp .env.example .env.production   # fill secrets
+#   docker compose up -d --build
+#
+# Optional: put Nginx/Caddy in front for TLS, or use host nginx (deploy/nginx.conf)
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Same origin on VPS — no vercel.app split unless you want it
+        NEXT_PUBLIC_ASSET_PREFIX: "0"
+        NEXT_PUBLIC_ASSET_HOST: ""
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      # Override asset split for single-host deploy
+      NEXT_PUBLIC_ASSET_PREFIX: "0"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

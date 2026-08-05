@@ -22,23 +22,47 @@ const useAssetPrefix =
 const nextConfig: NextConfig = {
   assetPrefix: useAssetPrefix ? assetHost : undefined,
   async headers() {
-    return [
+    // Cloudflare + browsers: allow short edge cache of marketing HTML
+    const htmlCache = [
       {
-        // Edge/browser can reuse HTML between revalidations (ISR = 120s)
-        source: "/",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, s-maxage=120, stale-while-revalidate=600",
-          },
-        ],
+        key: "Cache-Control",
+        value: "public, max-age=0, s-maxage=120, stale-while-revalidate=600",
       },
+      {
+        key: "CDN-Cache-Control",
+        value: "public, s-maxage=120, stale-while-revalidate=600",
+      },
+    ];
+    return [
+      { source: "/", headers: htmlCache },
       {
         source: "/privacy",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+            value: "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+          },
+          {
+            key: "CDN-Cache-Control",
+            value: "public, s-maxage=3600",
+          },
+        ],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/images/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=604800, stale-while-revalidate=86400",
           },
         ],
       },
