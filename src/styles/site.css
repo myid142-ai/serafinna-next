@@ -1648,6 +1648,23 @@ a:hover {
   border: 0;
 }
 
+.map-wrap__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 420px;
+  margin: 0;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  color: var(--sea-dark);
+  background:
+    linear-gradient(160deg, rgba(10, 92, 102, 0.08), rgba(184, 149, 108, 0.12)),
+    var(--sand);
+}
+
 /* Footer */
 .footer {
   background: #0d2f34;

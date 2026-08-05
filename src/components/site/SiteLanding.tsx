@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatPrice, WA_BOOK_HREF } from "@/lib/wa";
 
 type RoomDTO = {
@@ -74,7 +74,10 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [rooms] = useState(initialRooms);
-  const [galleryCount, setGalleryCount] = useState(12);
+  // Mobile: fewer gallery images on first paint (load more on demand)
+  const [galleryCount, setGalleryCount] = useState(4);
+  const [mapVisible, setMapVisible] = useState(false);
+  const mapRef = useRef<HTMLDivElement | null>(null);
 
   // room lightbox
   const [lbOpen, setLbOpen] = useState(false);
@@ -122,6 +125,27 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Yandex map iframe is heavy on mobile — mount only when section is near viewport
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el || mapVisible) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setMapVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setMapVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "240px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mapVisible]);
 
   const loadCalendar = useCallback(async () => {
     setCalLoading(true);
@@ -439,9 +463,9 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               </div>
             </div>
             <div className="about__photos">
-              <img src={assetUrl("/images/photo-17.jpg")} alt="Вид на бухту" className="about__img about__img--main" loading="lazy" />
-              <img src={assetUrl("/images/photo-24.jpg")} alt="Терраса" className="about__img about__img--side" loading="lazy" />
-              <img src={assetUrl("/images/photo-28.jpg")} alt="Территория" className="about__img about__img--side" loading="lazy" />
+              <img src={assetUrl("/images/photo-17.jpg")} alt="Вид на бухту" className="about__img about__img--main" loading="lazy" decoding="async" />
+              <img src={assetUrl("/images/photo-24.jpg")} alt="Терраса" className="about__img about__img--side" loading="lazy" decoding="async" />
+              <img src={assetUrl("/images/photo-28.jpg")} alt="Территория" className="about__img about__img--side" loading="lazy" decoding="async" />
             </div>
           </div>
         </section>
@@ -462,7 +486,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                 [assetUrl("/images/photo-17.jpg"), "Море рядом — спуск к пляжу ~5 минут"],
               ].map(([src, cap]) => (
                 <figure className="proof-card" key={src}>
-                  <img src={src} alt={cap} loading="lazy" />
+                  <img src={src} alt={cap} loading="lazy" decoding="async" />
                   <figcaption>{cap}</figcaption>
                 </figure>
               ))}
@@ -505,7 +529,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               категории
             </p>
             <div className="rooms__grid">
-              {rooms.map((room) => {
+              {rooms.map((room, roomIndex) => {
                 const photos = ROOM_PHOTOS[room.id] || [];
                 const mainIdx = roomMain[room.id] || 0;
                 return (
@@ -520,6 +544,9 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                         <img
                           src={photos[mainIdx] || photos[0]}
                           alt={room.name}
+                          loading={roomIndex === 0 ? "eager" : "lazy"}
+                          decoding="async"
+                          fetchPriority={roomIndex === 0 ? "high" : "low"}
                         />
                         <span className="room-card__count">{photos.length} фото</span>
                       </button>
@@ -534,7 +561,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                               setRoomMain((m) => ({ ...m, [room.id]: i }))
                             }
                           >
-                            <img src={src} alt="" />
+                            <img src={src} alt="" loading="lazy" decoding="async" />
                           </button>
                         ))}
                       </div>
@@ -975,7 +1002,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                   className="gallery__item"
                   onClick={() => openLightbox(GALLERY, i)}
                 >
-                  <img src={src} alt={`Фото ${i + 1}`} loading="lazy" />
+                  <img src={src} alt={`Фото ${i + 1}`} loading="lazy" decoding="async" />
                 </button>
               ))}
             </div>
@@ -983,7 +1010,7 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
               <button
                 className="btn btn--outline"
                 type="button"
-                onClick={() => setGalleryCount((c) => Math.min(c + 12, GALLERY.length))}
+                onClick={() => setGalleryCount((c) => Math.min(c + 8, GALLERY.length))}
               >
                 Показать ещё фото
               </button>
@@ -1074,13 +1101,24 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
                 </a>
               </div>
             </div>
-            <div className="map-wrap">
-              <iframe
-                title="Карта — гостевой дом Серафинна"
-                src="https://yandex.ru/map-widget/v1/?ll=38.706050%2C44.306169&z=16&pt=38.706050,44.306169,pm2rdm"
-                loading="lazy"
-                allowFullScreen
-              />
+            <div className="map-wrap" ref={mapRef}>
+              {mapVisible ? (
+                <iframe
+                  title="Карта — гостевой дом Серафинна"
+                  src="https://yandex.ru/map-widget/v1/?ll=38.706050%2C44.306169&z=16&pt=38.706050,44.306169,pm2rdm"
+                  loading="lazy"
+                  allowFullScreen
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="map-wrap__placeholder"
+                  onClick={() => setMapVisible(true)}
+                  aria-label="Показать карту"
+                >
+                  Нажмите, чтобы загрузить карту
+                </button>
+              )}
             </div>
           </div>
         </section>

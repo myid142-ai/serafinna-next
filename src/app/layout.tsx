@@ -2,18 +2,20 @@ import type { Metadata } from "next";
 import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "@/styles/site.css";
 
+// Fewer weights = fewer woff2 on mobile first load (~half the font bytes)
 const manrope = Manrope({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
+  subsets: ["cyrillic", "latin"],
+  weight: ["400", "600"],
   variable: "--font-manrope",
   display: "swap",
 });
 
 const cormorant = Cormorant_Garamond({
-  subsets: ["latin", "cyrillic"],
-  weight: ["500", "600", "700"],
+  subsets: ["cyrillic", "latin"],
+  weight: ["600", "700"],
   variable: "--font-cormorant",
   display: "swap",
+  preload: false, // body text first; headings swap in after
 });
 
 const assetHost = (
@@ -57,6 +59,13 @@ export default function RootLayout({
         {/* Preconnect to static/asset CDN (JS/CSS/photos on .vercel.app) */}
         <link rel="preconnect" href={assetHost} crossOrigin="anonymous" />
         <link rel="dns-prefetch" href={assetHost} />
+        {/* LCP hero background — same host as other images */}
+        <link
+          rel="preload"
+          as="image"
+          href={`${assetHost}/images/photo-08.jpg`}
+          fetchPriority="high"
+        />
       </head>
       <body>{children}</body>
     </html>

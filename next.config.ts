@@ -21,6 +21,29 @@ const useAssetPrefix =
 
 const nextConfig: NextConfig = {
   assetPrefix: useAssetPrefix ? assetHost : undefined,
+  async headers() {
+    return [
+      {
+        // Edge/browser can reuse HTML between revalidations (ISR = 120s)
+        source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=120, stale-while-revalidate=600",
+          },
+        ],
+      },
+      {
+        source: "/privacy",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: `/${adminPath}`, destination: "/panel" },
