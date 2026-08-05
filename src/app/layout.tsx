@@ -1,5 +1,24 @@
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "@/styles/site.css";
+
+const manrope = Manrope({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin", "cyrillic"],
+  weight: ["500", "600", "700"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+const assetHost = (
+  process.env.NEXT_PUBLIC_ASSET_HOST || "https://serafinna.vercel.app"
+).replace(/\/$/, "");
 
 export const metadata: Metadata = {
   title: "Серафинна — гостевой дом в Джубге с видом на море",
@@ -33,18 +52,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" className={`${manrope.variable} ${cormorant.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
+        {/* Preconnect to static/asset CDN (JS/CSS/photos on .vercel.app) */}
+        <link rel="preconnect" href={assetHost} crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href={assetHost} />
       </head>
       <body>{children}</body>
     </html>

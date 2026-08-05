@@ -14,8 +14,9 @@
   --shadow-soft: 0 10px 28px rgba(8, 45, 52, 0.06);
   --radius: 20px;
   --radius-sm: 14px;
-  --font: "Manrope", system-ui, sans-serif;
-  --serif: "Cormorant Garamond", Georgia, serif;
+  /* next/font sets --font-manrope / --font-cormorant (self-hosted, no Google runtime) */
+  --font: var(--font-manrope), "Manrope", system-ui, sans-serif;
+  --serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
 }
 
 *,
