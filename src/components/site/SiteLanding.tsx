@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatPrice, WA_BOOK_HREF } from "@/lib/wa";
 
@@ -70,7 +69,6 @@ const MONTH_NAMES = [
 ];
 
 export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
-  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [rooms] = useState(initialRooms);
@@ -264,21 +262,42 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
     }
 
     setLoading(true);
+    const payload = {
+      category_id: categoryId,
+      guest_name: guestName.trim(),
+      phone: phone.trim(),
+      email: (email || "").trim(),
+      check_in: checkIn,
+      check_out: checkOut,
+      guests,
+      comment: (comment || "").trim(),
+    };
+
+    async function postBooking(attempt: number): Promise<Response> {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
+      try {
+        return await fetch("/api/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+          cache: "no-store",
+        });
+      } catch (e) {
+        if (attempt < 1) {
+          // one retry — flaky .ru / VPN paths drop the first POST
+          await new Promise((r) => setTimeout(r, 600));
+          return postBooking(attempt + 1);
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     try {
-      const res = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category_id: categoryId,
-          guest_name: guestName.trim(),
-          phone: phone.trim(),
-          email: (email || "").trim(),
-          check_in: checkIn,
-          check_out: checkOut,
-          guests,
-          comment: (comment || "").trim(),
-        }),
-      });
+      const res = await postBooking(0);
       let data: {
         error?: string;
         id?: number;
@@ -288,7 +307,9 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       try {
         data = await res.json();
       } catch {
-        setStatus(`Ошибка сервера (${res.status}). Попробуйте WhatsApp.`);
+        setStatus(
+          `Сервер ответил некорректно (${res.status}). Напишите в WhatsApp: +7 (918) 409-22-79`
+        );
         return;
       }
       if (!res.ok) {
@@ -306,10 +327,31 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       params.set("check_in", checkIn);
       params.set("check_out", checkOut);
       if (roomName) params.set("room", roomName);
-      router.push(`/booking/success?${params.toString()}`);
+      const successUrl = `/booking/success?${params.toString()}`;
+
+      // Hard navigation is more reliable than router.push when the network
+      // path is flaky (soft nav can fail after a successful booking).
+      try {
+        window.location.assign(successUrl);
+      } catch {
+        setStatusOk(true);
+        setStatus(
+          `Заявка №${data.id} принята${
+            data.total_price
+              ? ` · ориентир ${Number(data.total_price).toLocaleString("ru-RU")} ₽`
+              : ""
+          }. Мы свяжемся с вами.`
+        );
+      }
       return;
-    } catch {
-      setStatus("Сеть недоступна. Напишите в WhatsApp: +7 (918) 409-22-79");
+    } catch (e) {
+      const aborted =
+        e instanceof DOMException && e.name === "AbortError";
+      setStatus(
+        aborted
+          ? "Сервер долго не отвечает. Напишите в WhatsApp: +7 (918) 409-22-79"
+          : "Сеть недоступна. Напишите в WhatsApp: +7 (918) 409-22-79"
+      );
     } finally {
       setLoading(false);
     }
