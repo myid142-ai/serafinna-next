@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { publicApiFetch } from "@/lib/publicApi";
 import { formatPrice, WA_BOOK_HREF } from "@/lib/wa";
 
 type RoomDTO = {
@@ -153,7 +154,10 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
         month: String(calMonth),
         category_id: categoryId,
       });
-      const res = await fetch(`/api/calendar?${q}`, { cache: "no-store" });
+      const res = await publicApiFetch(`/api/calendar?${q}`, {
+        cache: "no-store",
+        timeoutMs: 20000,
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Ошибка календаря (${res.status})`);
       const list = Array.isArray(data.days) ? data.days : [];
@@ -164,7 +168,13 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       setCalFirstWd(Number(data.first_weekday) || 0);
     } catch (e) {
       setCalDays([]);
-      setCalError(e instanceof Error ? e.message : "Календарь недоступен");
+      setCalError(
+        e instanceof Error
+          ? e.name === "AbortError"
+            ? "Календарь долго не отвечает — попробуйте ещё раз или WhatsApp"
+            : e.message
+          : "Календарь недоступен"
+      );
     } finally {
       setCalLoading(false);
     }
@@ -186,22 +196,27 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       check_in: checkIn,
       check_out: checkOut,
     });
-    const [quoteRes, cmpRes] = await Promise.all([
-      fetch(`/api/quote?${q}`),
-      fetch(
-        `/api/compare?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}`
-      ),
-    ]);
-    const quote = await quoteRes.json();
-    const cmp = await cmpRes.json();
-    if (quoteRes.ok && quote.can_book) {
-      setQuoteText(
-        `${quote.nights} ноч. · ${formatPrice(quote.total_price)} (ср. ${formatPrice(quote.avg_price)}/ночь)`
-      );
-    } else {
-      setQuoteText(quote.reason || quote.error || "Недоступно на эти даты");
+    try {
+      const [quoteRes, cmpRes] = await Promise.all([
+        publicApiFetch(`/api/quote?${q}`, { timeoutMs: 18000 }),
+        publicApiFetch(
+          `/api/compare?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}`,
+          { timeoutMs: 18000 }
+        ),
+      ]);
+      const quote = await quoteRes.json().catch(() => ({}));
+      const cmp = await cmpRes.json().catch(() => ({}));
+      if (quoteRes.ok && quote.can_book) {
+        setQuoteText(
+          `${quote.nights} ноч. · ${formatPrice(quote.total_price)} (ср. ${formatPrice(quote.avg_price)}/ночь)`
+        );
+      } else {
+        setQuoteText(quote.reason || quote.error || "Недоступно на эти даты");
+      }
+      if (cmpRes.ok) setCompare(cmp.categories || []);
+    } catch {
+      setQuoteText("Не удалось рассчитать цену — можно отправить заявку или написать в WhatsApp");
     }
-    if (cmpRes.ok) setCompare(cmp.categories || []);
   }, [checkIn, checkOut, categoryId]);
 
   useEffect(() => {
@@ -273,31 +288,14 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       comment: (comment || "").trim(),
     };
 
-    async function postBooking(attempt: number): Promise<Response> {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 25000);
-      try {
-        return await fetch("/api/bookings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-      } catch (e) {
-        if (attempt < 1) {
-          // one retry — flaky .ru / VPN paths drop the first POST
-          await new Promise((r) => setTimeout(r, 600));
-          return postBooking(attempt + 1);
-        }
-        throw e;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-
     try {
-      const res = await postBooking(0);
+      const res = await publicApiFetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        timeoutMs: 25000,
+        retries: 1,
+      });
       let data: {
         error?: string;
         id?: number;
@@ -329,19 +327,19 @@ export function SiteLanding({ initialRooms }: { initialRooms: RoomDTO[] }) {
       if (roomName) params.set("room", roomName);
       const successUrl = `/booking/success?${params.toString()}`;
 
-      // Hard navigation is more reliable than router.push when the network
-      // path is flaky (soft nav can fail after a successful booking).
+      // Prefer hard navigation; always show success if assign fails
+      setStatusOk(true);
+      setStatus(
+        `Заявка №${data.id} принята${
+          data.total_price
+            ? ` · ориентир ${Number(data.total_price).toLocaleString("ru-RU")} ₽`
+            : ""
+        }. Мы свяжемся с вами.`
+      );
       try {
         window.location.assign(successUrl);
       } catch {
-        setStatusOk(true);
-        setStatus(
-          `Заявка №${data.id} принята${
-            data.total_price
-              ? ` · ориентир ${Number(data.total_price).toLocaleString("ru-RU")} ₽`
-              : ""
-          }. Мы свяжемся с вами.`
-        );
+        /* keep inline success */
       }
       return;
     } catch (e) {

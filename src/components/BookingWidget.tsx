@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { publicApiFetch } from "@/lib/publicApi";
 
 type RoomOpt = { id: string; name: string };
 
@@ -28,17 +29,21 @@ export function BookingWidget({ rooms }: { rooms: RoomOpt[] }) {
       check_in: checkIn,
       check_out: checkOut,
     });
-    const res = await fetch(`/api/quote?${q}`);
-    const data = await res.json();
-    if (!res.ok) {
-      setQuote(data.error || "Ошибка расчёта");
-      return;
+    try {
+      const res = await publicApiFetch(`/api/quote?${q}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setQuote(data.error || "Ошибка расчёта");
+        return;
+      }
+      setQuote(
+        data.can_book
+          ? `${data.nights} ноч. · ${Number(data.total_price).toLocaleString("ru-RU")} ₽ (ср. ${Number(data.avg_price).toLocaleString("ru-RU")} ₽/ночь)`
+          : data.reason || "Недоступно"
+      );
+    } catch {
+      setQuote("Не удалось рассчитать — можно отправить заявку");
     }
-    setQuote(
-      data.can_book
-        ? `${data.nights} ноч. · ${Number(data.total_price).toLocaleString("ru-RU")} ₽ (ср. ${Number(data.avg_price).toLocaleString("ru-RU")} ₽/ночь)`
-        : data.reason || "Недоступно"
-    );
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -46,7 +51,7 @@ export function BookingWidget({ rooms }: { rooms: RoomOpt[] }) {
     setLoading(true);
     setStatus("");
     try {
-      const res = await fetch("/api/bookings", {
+      const res = await publicApiFetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -58,6 +63,7 @@ export function BookingWidget({ rooms }: { rooms: RoomOpt[] }) {
           guests,
           comment,
         }),
+        timeoutMs: 25000,
       });
       const data = await res.json();
       if (!res.ok) {
